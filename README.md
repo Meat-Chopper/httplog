@@ -87,7 +87,10 @@ HttpLog.configure do |config|
   config.url_blacklist_pattern = nil
 
   # Mask sensitive information in request and response JSON data
+  # To parse all requests: 
   config.mask_json = false
+  # Pattern to parse only selected URLs
+  config.url_masked_body_pattern = nil
 
   # You can specify any custom JSON serializer that implements `load` and `dump` class methods
   config.json_parser = JSON
@@ -253,19 +256,3 @@ This will launch a simple rack server on port 9292 and run all tests locally aga
 If you have any issues with or feature requests for httplog,
 please [open an issue](https://github.com/trusche/httplog/issues) on GitHub
 or fork the project and send a pull request. **Please include passing specs with all pull requests.**
-
-### Contributors
-
-Thanks to these fine folks for contributing pull requests:
-
-* [Doug Johnston](https://github.com/dougjohnston)
-* [Eric Cohen](https://github.com/eirc)
-* [Nikos Dimitrakopoulos](https://github.com/nikosd)
-* [Marcos Hack](https://github.com/marcoshack)
-* [Andrew Hammond](https://github.com/andrhamm)
-* [Chris Keele](https://github.com/christhekeele)
-* [Ryan Souza](https://github.com/ryansouza)
-* [Ilya Bondarenko](https://github.com/sedx)
-* [Kostas Zacharakis](https://github.com/kzacharakis)
-* [Yuri Smirnov](https://github.com/tycooon)
-* [Manuel Bustillo Alonso](https://github.com/bustikiller)

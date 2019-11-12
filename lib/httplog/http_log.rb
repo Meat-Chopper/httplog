@@ -43,7 +43,7 @@ module HttpLog
         HttpLog.log_status(options[:response_code])
         HttpLog.log_benchmark(options[:benchmark])
         HttpLog.log_headers(options[:response_headers])
-        HttpLog.log_body(options[:response_body], options[:encoding], options[:content_type])
+        HttpLog.log_body(options[:response_body], options[:mask_body], options[:encoding], options[:content_type])
       end
     end
 
@@ -51,6 +51,11 @@ module HttpLog
       return false if config.url_blacklist_pattern && url.to_s.match(config.url_blacklist_pattern)
 
       !config.url_whitelist_pattern || url.to_s.match(config.url_whitelist_pattern)
+    end
+
+    def masked_body_url?(url)
+      config.filter_parameters.any? &&
+        (config.url_masked_body_pattern && url.to_s.match(config.url_masked_body_pattern) || config.mask_json)
     end
 
     def log(msg)
@@ -92,10 +97,10 @@ module HttpLog
       log("Benchmark: #{seconds.to_f.round(6)} seconds")
     end
 
-    def log_body(body, encoding = nil, content_type = nil)
+    def log_body(body, mask_body, encoding = nil, content_type = nil)
       return unless config.log_response
 
-      data = masked_data(parse_body(body, encoding, content_type))
+      data = parse_body(body, mask_body, encoding, content_type)
 
       if config.prefix_response_lines
         log('Response:')
@@ -107,7 +112,7 @@ module HttpLog
       log("Response: #{e.message}")
     end
 
-    def parse_body(body, encoding, content_type)
+    def parse_body(body, mask_body, encoding, content_type)
       unless text_based?(content_type)
         raise BodyParsingError, "(not showing binary data)"
       end
@@ -130,11 +135,15 @@ module HttpLog
 
       result = utf_encoded(body.to_s, content_type)
 
-      if config.mask_json && content_type =~ /json/ && body && !body.empty?
-        begin
-          result = config.json_parser.load(result)
-        rescue => e
-          e.message + ': ' + result
+      if mask_body && body && !body.empty?
+        if content_type =~ /json/
+          begin
+            result = masked_data(config.json_parser.load(result))
+          rescue => e
+            e.message + ': ' + result
+          end
+        else
+          result = masked(result)
         end
       end
       result
@@ -195,7 +204,7 @@ module HttpLog
       data[:response_code] = transform_response_code(data[:response_code]) if data[:response_code].is_a?(Symbol)
 
       parsed_body = begin
-                      parse_body(data[:response_body], data[:encoding], data[:content_type])
+                      parse_body(data[:response_body], data[:mask_body], data[:encoding], data[:content_type])
                     rescue BodyParsingError => e
                       e.message
                     end
@@ -214,7 +223,7 @@ module HttpLog
           request_body:     data[:request_body],
           request_headers:  masked(data[:request_headers].to_h),
           response_code:    data[:response_code].to_i,
-          response_body:    masked_data(parsed_body),
+          response_body:    parsed_body,
           response_headers: data[:response_headers].to_h,
           benchmark:        data[:benchmark]
         }
@@ -247,27 +256,25 @@ module HttpLog
     def parse_request(options)
       return if options[:request_body].nil?
 
-      request = options[:request_headers].find_all { |k, _| %w[content-type content-encoding].include? k }.to_h
-      copy    = options[:request_body].dup
+      request = options[:request_headers].find_all do |k, _|
+        # Capitalized for ::HTTP
+        %w[content-type Content-Type content-encoding Content-Encoding].include? k
+      end.to_h.each_with_object({}) { |(k, v), h| h[k.downcase] = v }
 
-      if text_based?(request['content-type']) && config.mask_json
-        begin
-          copy = parse_body(copy, request['content-encoding'], request['content-type'])
-        rescue BodyParsingError => e
-          log(e.message)
-        end
-      end
+      copy = options[:request_body].dup
 
-      options[:request_body] = if hash_classes.include?(copy.class) && config.mask_json
-                                 masked_data(copy)
+      options[:request_body] = if text_based?(request['content-type']) && options[:mask_body]
+                                 begin
+                                   parse_body(copy, options[:mask_body], request['content-encoding'], request['content-type'])
+                                 rescue BodyParsingError => e
+                                   log(e.message)
+                                 end
                                else
-                                 utf_encoded(masked(copy).to_s, request['content-type'])
+                                 masked(copy).to_s
                                end
     end
 
     def masked_data msg
-      return msg unless config.mask_json && config.filter_parameters.any?
-
       case msg
       when Hash
         Hash[msg.map { |k, v| [k, config.filter_parameters.include?(k.downcase) ? PARAM_MASK : masked_data(v)] }]
