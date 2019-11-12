@@ -29,6 +29,7 @@ module HttpLog
     end
 
     def call(options = {})
+      parse_request(options)
       if config.json_log
         log_json(options)
       elsif config.graylog
@@ -94,7 +95,7 @@ module HttpLog
     def log_body(body, encoding = nil, content_type = nil)
       return unless config.log_response
 
-      data = parse_body(body, encoding, content_type)
+      data = masked_data(parse_body(body, encoding, content_type))
 
       if config.prefix_response_lines
         log('Response:')
@@ -127,13 +128,20 @@ module HttpLog
         end
       end
 
-      utf_encoded(body.to_s, content_type)
+      result = utf_encoded(body.to_s, content_type)
+
+      if config.mask_json && content_type =~ /json/ && body && !body.empty?
+        begin
+          result = config.json_parser.load(result)
+        rescue => e
+          e.message + ': ' + result
+        end
+      end
+      result
     end
 
     def log_data(data)
       return unless config.log_data
-
-      data = utf_encoded(masked(data.dup).to_s) unless data.nil?
 
       if config.prefix_data_lines
         log('Data:')
@@ -172,7 +180,7 @@ module HttpLog
     def log_json(data = {})
       return unless config.json_log
 
-      log(json_payload(data).to_json)
+      log(config.json_parser.dump(json_payload(data)))
     end
 
     def log_graylog(data = {})
@@ -203,10 +211,10 @@ module HttpLog
         {
           method:           data[:method].to_s.upcase,
           url:              masked(data[:url]),
-          request_body:     masked(data[:request_body]),
+          request_body:     data[:request_body],
           request_headers:  masked(data[:request_headers].to_h),
           response_code:    data[:response_code].to_i,
-          response_body:    parsed_body,
+          response_body:    masked_data(parsed_body),
           response_headers: data[:response_headers].to_h,
           benchmark:        data[:benchmark]
         }
@@ -232,6 +240,40 @@ module HttpLog
         Hash[msg.map {|k,v| [k, masked(v, k)]}]
       else
         log "*** FILTERING NOT APPLIED BECAUSE #{msg.class} IS UNEXPECTED ***"
+        msg
+      end
+    end
+
+    def parse_request(options)
+      return if options[:request_body].nil?
+
+      request = options[:request_headers].find_all { |k, _| %w[content-type content-encoding].include? k }.to_h
+      copy    = options[:request_body].dup
+
+      if text_based?(request['content-type']) && config.mask_json
+        begin
+          copy = parse_body(copy, request['content-encoding'], request['content-type'])
+        rescue BodyParsingError => e
+          log(e.message)
+        end
+      end
+
+      options[:request_body] = if hash_classes.include?(copy.class) && config.mask_json
+                                 masked_data(copy)
+                               else
+                                 utf_encoded(masked(copy).to_s, request['content-type'])
+                               end
+    end
+
+    def masked_data msg
+      return msg unless config.mask_json && config.filter_parameters.any?
+
+      case msg
+      when Hash
+        Hash[msg.map { |k, v| [k, config.filter_parameters.include?(k.downcase) ? PARAM_MASK : masked_data(v)] }]
+      when Array
+        msg.map { |element| masked_data(element) }
+      else
         msg
       end
     end
