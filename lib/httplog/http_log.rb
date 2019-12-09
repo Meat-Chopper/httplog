@@ -61,7 +61,7 @@ module HttpLog
     def log(msg)
       return unless config.enabled
 
-      config.logger.public_send(config.logger_method, config.severity, colorize(prefix + msg))
+      config.logger.public_send(config.logger_method, config.severity, colorize(prefix + msg.to_s))
     end
 
     def log_connection(host, port = nil)
@@ -100,7 +100,7 @@ module HttpLog
     def log_body(body, mask_body, encoding = nil, content_type = nil)
       return unless config.log_response
 
-      data = parse_body(body, mask_body, encoding, content_type)
+      data = parse_body(body.dup, mask_body, encoding, content_type)
 
       if config.prefix_response_lines
         log('Response:')
@@ -189,7 +189,15 @@ module HttpLog
     def log_json(data = {})
       return unless config.json_log
 
-      log(config.json_parser.dump(json_payload(data)))
+      log(
+        begin
+          config.json_parser.dump(json_payload(data))
+        rescue
+          data[:response_body] = "#{config.json_parser} dump failed"
+          data[:request_body]  = "#{config.json_parser} dump failed"
+          json_payload(data)
+        end
+      )
     end
 
     def log_graylog(data = {})
@@ -197,14 +205,20 @@ module HttpLog
 
       result[:rounded_benchmark] = data[:benchmark].round
       result[:short_message]     = result.delete(:url)
-      config.logger.public_send(config.logger_method, config.severity, result)
+      begin
+        config.logger.public_send(config.logger_method, config.severity, result)
+      rescue
+        result[:response_body] = 'Application JSON dump failed'
+        result[:request_body]  = 'Application JSON dump failed'
+        config.logger.public_send(config.logger_method, config.severity, result)
+      end
     end
 
     def json_payload(data = {})
       data[:response_code] = transform_response_code(data[:response_code]) if data[:response_code].is_a?(Symbol)
 
       parsed_body = begin
-                      parse_body(data[:response_body], data[:mask_body], data[:encoding], data[:content_type])
+                      parse_body(data[:response_body].dup, data[:mask_body], data[:encoding], data[:content_type])
                     rescue BodyParsingError => e
                       e.message
                     end

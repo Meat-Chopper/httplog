@@ -384,6 +384,25 @@ describe HttpLog do
           it { expect(json['response_body'].to_s).not_to include(secret) }
         end
       end
+
+      describe 'POST requests' do
+        if adapter_class.method_defined? :send_post_request
+          let!(:res) { adapter.send_post_request }
+          let(:json_log) { true }
+
+          it { expect(res).to be_a adapter.response if adapter.respond_to? :response }
+
+          context 'with non-UTF request data' do
+            let(:data) { "a UTF-8 striñg with an 8BIT-ASCII character: \xC3" }
+            it { is_expected.to include("request_body") } # == doesn't throw exception
+          end
+
+          context 'with URI encoded non-UTF data' do
+            let(:data) { 'a UTF-8 striñg with a URI encoded 8BIT-ASCII character: %c3' }
+            it { is_expected.to include("request_body") } # == doesn't throw exception
+          end
+        end
+      end
     end
   end
 end
