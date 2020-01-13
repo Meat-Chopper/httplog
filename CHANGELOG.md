@@ -1,3 +1,13 @@
+## 1.4.0 - TBD
+
+* Bumped ruby version to 2.7
+* Fixed ruby 2.7 deprecations
+* Removed support for ruby < 2.4
+
+## 1.3.3 - 2019-11-14
+
+* [#83](https://github.com/trusche/httplog/pull/83) Support for graylog
+
 ## 1.3.1 - 2019-06-07
 
 * [#76](https://github.com/trusche/httplog/pull/76) Added configurable logger method

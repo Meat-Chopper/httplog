@@ -86,10 +86,8 @@ HttpLog.configure do |config|
   config.url_whitelist_pattern = nil
   config.url_blacklist_pattern = nil
 
-  # Mask sensitive information in request and response JSON data
-  # To parse all requests: 
-  config.mask_json = false
-  # Pattern to parse only selected URLs
+  # Mask sensitive information in request and response JSON data.
+  # Enable global JSON masking by setting the parameter to `/.*/`
   config.url_masked_body_pattern = nil
 
   # You can specify any custom JSON serializer that implements `load` and `dump` class methods
@@ -130,7 +128,7 @@ HttpLog.configure do |config|
 end
 ```
 
-If you use Graylog and want to use its search features such as "rounded_benchmark:>1 AND method:PUT",
+If you use Graylog and want to use its search features such as "benchmark:>1 AND method:PUT",
 you can use this configuration:
 
 ```ruby

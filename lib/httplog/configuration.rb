@@ -24,7 +24,6 @@ module HttpLog
                   :prefix_data_lines,
                   :prefix_response_lines,
                   :prefix_line_numbers,
-                  :mask_json,
                   :json_parser,
                   :filter_parameters
 
@@ -51,7 +50,6 @@ module HttpLog
       @prefix_data_lines       = false
       @prefix_response_lines   = false
       @prefix_line_numbers     = false
-      @mask_json               = false
       @json_parser             = JSON
       @filter_parameters       = []
     end

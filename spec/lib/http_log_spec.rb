@@ -14,8 +14,10 @@ describe HttpLog do
   let(:params)  { { 'foo' => secret, 'bar' => 'foo:form-data' } }
   let(:html)    { File.read('./spec/support/index.html') }
   let(:json)    { JSON.parse(log.match(/\[httplog\]\s(.*)/).captures.first) }
+  let(:gray_log) { JSON.parse("{#{log.match(/{(.*)/).captures.first}") }
 
   # Default configuration
+  let(:logger)                { Logger.new @log }
   let(:enabled)               { HttpLog.configuration.enabled }
   let(:severity)              { HttpLog.configuration.severity }
   let(:log_headers)           { HttpLog.configuration.log_headers }
@@ -29,16 +31,17 @@ describe HttpLog do
   let(:prefix_response_lines) { HttpLog.configuration.prefix_response_lines }
   let(:prefix_line_numbers)   { HttpLog.configuration.prefix_line_numbers }
   let(:json_log)              { HttpLog.configuration.json_log }
+  let(:graylog)               { HttpLog.configuration.graylog }
   let(:compact_log)           { HttpLog.configuration.compact_log }
   let(:url_blacklist_pattern) { HttpLog.configuration.url_blacklist_pattern }
   let(:url_whitelist_pattern) { HttpLog.configuration.url_whitelist_pattern }
-  let(:mask_json)             { HttpLog.configuration.mask_json }
   let(:json_parser)           { HttpLog.configuration.json_parser }
   let(:filter_parameters)     { HttpLog.configuration.filter_parameters }
   let(:url_masked_body_pattern) { HttpLog.configuration.url_masked_body_pattern }
 
   def configure
     HttpLog.configure do |c|
+      c.logger                = logger
       c.enabled               = enabled
       c.severity              = severity
       c.log_headers           = log_headers
@@ -52,10 +55,10 @@ describe HttpLog do
       c.prefix_response_lines = prefix_response_lines
       c.prefix_line_numbers   = prefix_line_numbers
       c.json_log              = json_log
+      c.graylog               = graylog
       c.compact_log           = compact_log
       c.url_blacklist_pattern = url_blacklist_pattern
       c.url_whitelist_pattern = url_whitelist_pattern
-      c.mask_json             = mask_json
       c.json_parser           = json_parser
       c.filter_parameters     = filter_parameters
       c.url_masked_body_pattern = url_masked_body_pattern
@@ -92,9 +95,7 @@ describe HttpLog do
           it { is_expected.to_not include('Header:') }
           it { is_expected.to_not include("\e[0") }
 
-          unless adapter_class.is_libcurl?
-            it { is_expected.to include("Connecting: #{host}:#{port}") }
-          end
+          it { is_expected.to include("Connecting: #{host}:#{port}") } unless adapter_class.is_libcurl?
 
           it { expect(res).to be_a adapter.response if adapter.respond_to? :response }
 
@@ -138,9 +139,7 @@ describe HttpLog do
           if adapter_class.method_defined? :send_post_request
             let!(:res) { adapter.send_post_request }
 
-            unless adapter_class.is_libcurl?
-              it { is_expected.to include("Connecting: #{host}:#{port}") }
-            end
+            it { is_expected.to include("Connecting: #{host}:#{port}") } unless adapter_class.is_libcurl?
 
             it_behaves_like 'logs request', 'POST'
             it_behaves_like 'logs expected response'
@@ -296,30 +295,14 @@ describe HttpLog do
       context 'with JSON config' do
         let(:json_log) { true }
 
-        if adapter_class.method_defined? :send_post_request
-          before { adapter.send_post_request }
+        it_behaves_like 'logs JSON', adapter_class, false
+      end
 
-          it { expect(json['method']).to eq('POST') }
-          it { expect(json['request_body']).to eq(data) }
-          it { expect(json['request_headers']).to be_a(Hash) }
-          it { expect(json['response_headers']).to be_a(Hash) }
-          it { expect(json['response_code']).to eq(200) }
-          it { expect(json['response_body']).to eq(html) }
-          it { expect(json['benchmark']).to be_a(Numeric) }
-          it_behaves_like 'filtered parameters'
+      context 'with Graylog config' do
+        let(:graylog) { true }
+        let(:logger) { GelfMock.new @log }
 
-          context 'and compact config' do
-            let(:compact_log) { true }
-
-            it { expect(json['method']).to eq('POST') }
-            it { expect(json['request_body']).to be_nil }
-            it { expect(json['request_headers']).to be_nil }
-            it { expect(json['response_headers']).to be_nil }
-            it { expect(json['response_code']).to eq(200) }
-            it { expect(json['response_body']).to be_nil }
-            it { expect(json['benchmark']).to be_a(Numeric) }
-          end
-        end
+        it_behaves_like 'logs JSON', adapter_class, true
       end
 
       context 'with custom JSON parser' do
@@ -330,7 +313,7 @@ describe HttpLog do
       end
 
       context 'with masked JSON and not JSON data' do
-        let(:mask_json) { true }
+        let(:url_masked_body_pattern) { /.*/ }
         let(:params) { { 'foo' => secret } }
 
         # It shouldn't crash functionality with not JSON data
@@ -338,7 +321,7 @@ describe HttpLog do
       end
 
       context 'with default JSON parser' do
-        let(:mask_json) { true }
+        let(:url_masked_body_pattern) { /.*/ }
         it_behaves_like 'with masked JSON', adapter_class
       end
 
@@ -361,7 +344,7 @@ describe HttpLog do
       end
 
       context 'with custom JSON parser' do
-        let(:mask_json) { true }
+        let(:url_masked_body_pattern) { /.*/ }
         let(:json_parser) { Oj }
 
         it_behaves_like 'with masked JSON', adapter_class
@@ -371,7 +354,7 @@ describe HttpLog do
         let(:json_log)  { true }
         let(:path)      { '/index.json' }
         let(:headers)   { { 'accept' => 'application/json', 'foo' => secret, 'content-type' => 'application/json' } }
-        let(:mask_json) { true }
+        let(:url_masked_body_pattern) { /.*/ }
         let(:data) do
           '{foo:"my secret","bar":"baz","array":[{"foo":"my secret","bar":"baz"},{"hash":{"foo":"my secret","bar":"baz"}}]}'
         end
@@ -385,7 +368,7 @@ describe HttpLog do
         end
       end
 
-      describe 'POST requests' do
+      describe 'Non UTF-8 with JSON log' do
         if adapter_class.method_defined? :send_post_request
           let!(:res) { adapter.send_post_request }
           let(:json_log) { true }

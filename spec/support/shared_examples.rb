@@ -70,7 +70,7 @@ RSpec.shared_examples 'with connection logging disabled' do
 end
 
 RSpec.shared_examples 'filtered parameters' do
-  let(:filter_parameters) { %w(foo) }
+  let(:filter_parameters) { %w[foo] }
 
   it 'masks the filtered value' do
     # is_expected.to include('foo=[FILTERED]&').or exclude('foo')
@@ -91,7 +91,6 @@ RSpec.shared_examples 'logs JSON' do |adapter_class, gray|
     it { expect(result['response_body']).to eq(html) }
     it { expect(result['benchmark']).to be_a(Numeric) }
     if gray
-      it { expect(result['rounded_benchmark']).to be_a(Integer) }
       it { expect(result['short_message']).to be_a(String) }
     end
     it_behaves_like 'filtered parameters'
