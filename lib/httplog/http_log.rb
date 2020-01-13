@@ -190,26 +190,34 @@ module HttpLog
 
       log(
         begin
-          config.json_parser.dump(json_payload(data))
+          dump_json(data)
         rescue
           data[:response_body] = "#{config.json_parser} dump failed"
           data[:request_body]  = "#{config.json_parser} dump failed"
-          json_payload(data)
+          dump_json(data)
         end
       )
     end
 
-    def log_graylog(data = {})
+    def dump_json(data)
+      config.json_parser.dump(json_payload(data))
+    end
+
+    def log_graylog(data)
       result = json_payload(data)
 
       result[:short_message] = result.delete(:url)
       begin
-        config.logger.public_send(config.logger_method, config.severity, result)
+        send_to_graylog result
       rescue
         result[:response_body] = 'Graylog JSON dump failed'
         result[:request_body]  = 'Graylog JSON dump failed'
-        config.logger.public_send(config.logger_method, config.severity, result)
+        send_to_graylog result
       end
+    end
+
+    def send_to_graylog data
+      config.logger.public_send(config.logger_method, config.severity, data)
     end
 
     def json_payload(data = {})
