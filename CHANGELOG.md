@@ -1,8 +1,6 @@
-## 1.4.0 - TBD
+## 1.4.0 - 2020-01-19
 
-* Bumped ruby version to 2.7
-* Fixed ruby 2.7 deprecations
-* Removed support for ruby < 2.4
+* [#85](https://github.com/trusche/httplog/pull/85) Parse JSON response and apply deep masking
 
 ## 1.3.3 - 2019-11-14
 

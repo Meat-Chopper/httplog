@@ -91,6 +91,7 @@ HttpLog.configure do |config|
   config.url_masked_body_pattern = nil
 
   # You can specify any custom JSON serializer that implements `load` and `dump` class methods
+  # to parse JSON responses
   config.json_parser = JSON
 
   # Mask the values of sensitive request parameters
@@ -128,19 +129,37 @@ HttpLog.configure do |config|
 end
 ```
 
+For more color options please refer to the [rainbow documentation](https://github.com/sickill/rainbow)
+
+### Graylog logging
+
 If you use Graylog and want to use its search features such as "benchmark:>1 AND method:PUT",
 you can use this configuration:
 
 ```ruby
+FORMATTER = Lograge::Formatters::KeyValue.new
+
 HttpLog.configure do |config|
-  config.logger        = <your GELF::Logger>
-  config.logger_method = :add
-  config.severity      = GELF::Levels::DEBUG
-  config.graylog       = true
+  config.logger            = <your GELF::Logger>
+  config.logger_method     = :add
+  config.severity          = GELF::Levels::DEBUG
+  config.graylog_formatter = FORMATTER
 end
 ```
 
-For more color options please refer to the [rainbow documentation](https://github.com/sickill/rainbow)
+You also can use GELF Graylog format this way:
+
+```ruby
+class Lograge::Formatters::Graylog2HttpLog < Lograge::Formatters::Graylog2
+  def short_message data
+    "[httplog] [#{data[:response_code]}] #{data[:method]} #{data[:url]}"
+  end
+end
+
+FORMATTER = Lograge::Formatters::Graylog2HttpLog.new
+```
+
+Or define your own class that implements the `call` method
 
 ### Compact logging
 
