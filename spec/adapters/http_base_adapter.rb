@@ -19,14 +19,27 @@ class HTTPBaseAdapter
     true
   end
 
-  def parse_uri(query = false)
+  def parse_uri(query=false)
     uri = "#{@protocol}://#{@host}:#{@port}#{@path}"
-    uri = [uri, safe_query_string(@data)].compact.join('?') if query
+    uri = [uri, URI::encode(@data)].join('?') if query && @data
     URI.parse(uri)
   end
 
   def expected_response_body
     "\n<html>"
+  end
+
+  def expected_full_response_body
+    <<-HTML.gsub(/^      /, "").strip
+      <html>
+        <head>
+          <title>Test Page</title>
+        </head>
+        <body>
+          <h1>This is the test page.</h1>
+        </body>
+      </html>
+    HTML
   end
 
   def self.is_libcurl?
@@ -37,13 +50,7 @@ class HTTPBaseAdapter
     true
   end
 
-  def safe_query_string(data)
-    return nil unless data
-
-    data.to_s.split('&').map do |pair|
-      pair.split('=', 2).map do |token|
-        CGI.escape(token.to_s)
-      end.join('=')
-    end.join('&')
+  def self.response_string_for(response)
+    response.to_s
   end
 end

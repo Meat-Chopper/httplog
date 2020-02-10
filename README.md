@@ -1,5 +1,7 @@
 ## httplog
 
+**VERSION 1.4.0 and 1.4.1 HAVE BEEN YANKED** from rubygems.org due to [this issue](https://github.com/trusche/httplog/issues/89), please update to version 1.4.2. Sorry about that...
+
 [![Gem Version](https://badge.fury.io/rb/httplog.svg)](http://badge.fury.io/rb/httplog) [![Build Status](https://travis-ci.org/trusche/httplog.svg?branch=master)](https://travis-ci.org/trusche/httplog) [![Code Climate](https://codeclimate.com/github/trusche/httplog.svg)](https://codeclimate.com/github/trusche/httplog)
 [![Release Version](https://img.shields.io/github/release/trusche/httplog.svg)](https://img.shields.io/github/release/trusche/httplog.svg)
 
@@ -152,6 +154,7 @@ You also can use GELF Graylog format this way:
 ```ruby
 class Lograge::Formatters::Graylog2HttpLog < Lograge::Formatters::Graylog2
   def short_message data
+    data[:response_body] = data[:response_body].to_s.byteslice(0, 32_766) unless data[:response_body].blank?
     "[httplog] [#{data[:response_code]}] #{data[:method]} #{data[:url]}"
   end
 end

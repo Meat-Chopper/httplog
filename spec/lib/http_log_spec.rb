@@ -5,16 +5,16 @@ require 'spec_helper'
 describe HttpLog do
   subject { log } # see spec_helper
 
-  let(:secret)   { 'my secret' }
-  let(:host)     { 'localhost' }
-  let(:port)     { 9292 }
-  let(:path)     { '/index.html' }
-  let(:headers)  { { 'accept' => '*/*', 'foo' => secret } }
-  let(:data)     { "foo=#{secret}&bar=foo" }
-  let(:params)   { { 'foo' => secret, 'bar' => 'foo:form-data' } }
-  let(:html)     { File.read('./spec/support/index.html') }
-  let(:json)     { JSON.parse(log.match(/\[httplog\]\s(.*)/).captures.first) }
-  let(:gray_log) { JSON.parse("{#{log.match(/{(.*)/).captures.first}") }
+  let(:secret)  { 'my secret' }
+  let(:host)    { 'localhost' }
+  let(:port)    { 9292 }
+  let(:path)    { '/index.html' }
+  let(:headers) { { 'accept' => '*/*', 'foo' => secret } }
+  let(:data)    { "foo=#{secret}&bar=foo" }
+  let(:params)  { { 'foo' => secret, 'bar' => 'foo:form-data' } }
+  let(:html)    { File.read('./spec/support/index.html') }
+  let(:json)    { JSON.parse(log.match(/\[httplog\]\s(.*)/).captures.first) }
+  let(:gray_log) { JSON.parse("{#{log.match(/\{(.*)/).captures.first}") }
 
   # Default configuration
   let(:logger)                  { Logger.new @log }
@@ -95,9 +95,16 @@ describe HttpLog do
           it { is_expected.to_not include('Header:') }
           it { is_expected.to_not include("\e[0") }
 
-          it { is_expected.to include("Connecting: #{host}:#{port}") } unless adapter_class.is_libcurl?
+          unless adapter_class.is_libcurl?
+            it { is_expected.to include("Connecting: #{host}:#{port}") }
+          end
 
           it { expect(res).to be_a adapter.response if adapter.respond_to? :response }
+
+          it "does not alter adapter response" do
+            response_string = adapter.class.response_string_for(res)
+            expect(response_string).to eq(adapter.expected_full_response_body)
+          end
 
           context 'with gzip encoding' do
             let(:path) { '/index.html.gz' }
@@ -139,7 +146,9 @@ describe HttpLog do
           if adapter_class.method_defined? :send_post_request
             let!(:res) { adapter.send_post_request }
 
-            it { is_expected.to include("Connecting: #{host}:#{port}") } unless adapter_class.is_libcurl?
+            unless adapter_class.is_libcurl?
+              it { is_expected.to include("Connecting: #{host}:#{port}") }
+            end
 
             it_behaves_like 'logs request', 'POST'
             it_behaves_like 'logs expected response'
@@ -150,6 +159,11 @@ describe HttpLog do
             it { is_expected.to_not include('Header:') }
 
             it { expect(res).to be_a adapter.response if adapter.respond_to? :response }
+
+            it "does not alter adapter response" do
+              response_string = adapter.class.response_string_for(res)
+              expect(response_string).to eq(adapter.expected_full_response_body)
+            end
 
             context 'with non-UTF request data' do
               let(:data) { "a UTF-8 striñg with an 8BIT-ASCII character: \xC3" }
@@ -374,6 +388,11 @@ describe HttpLog do
           let(:json_log) { true }
 
           it { expect(res).to be_a adapter.response if adapter.respond_to? :response }
+
+          it "does not alter adapter response" do
+            response_string = adapter.class.response_string_for(res)
+            expect(response_string).to eq(adapter.expected_full_response_body)
+          end
 
           context 'with non-UTF request data' do
             let(:data) { "a UTF-8 striñg with an 8BIT-ASCII character: \xC3" }
